@@ -1,0 +1,172 @@
+$LOAD_PATH << File.dirname(__FILE__)
+
+require 'board_elements'
+require 'beeper'
+
+class Board
+  attr_accessor :height, :width, :cells, :karel, :beepers
+  
+  def initialize width = false, height = false
+    @height = height ? height : 20
+    @width = width ? width : 20
+    
+    @beepers = []
+    
+    prepare_cells
+    
+    add_borders
+    
+  end
+  
+  def prepare_cells
+    @cells = []
+    
+    for i in (0..(@width+1)) do
+      @cells[i] = []
+      for j in (0..(@height+1)) do
+        @cells[i][j] = nil
+      end
+    end
+  end
+  
+  def add_borders
+    
+    for i in (0..(@width+1)) do
+      @cells[i][0] = WALL_CELL
+      @cells[i][@height+1] = WALL_CELL
+    end
+    
+    for i in (0..(@height+1)) do
+      @cells[0][i] = WALL_CELL
+      @cells[@width+1][i] = WALL_CELL
+    end
+  end
+  
+  def add_wall start_x, start_y, direction, size
+    if start_x < 1 or start_y < 1
+      raise "illegal wall boundaries"
+    end
+    
+    put_element start_x, start_y, WALL_CELL
+    
+    current_x = start_x
+    current_y = start_y
+    
+    case direction
+    when :to_east
+      size.times do
+        current_x = current_x + 1
+        put_element current_x, current_y, WALL_CELL
+      end
+    when :to_west
+      size.times do
+        current_x = current_x - 1
+        put_element current_x, current_y, WALL_CELL
+      end
+    when :to_north
+      size.times do
+        current_y = current_y - 1
+        put_element current_x, current_y, WALL_CELL
+      end
+    when :to_south
+      size.times do
+        current_y = current_y + 1 
+        put_element current_x, current_y, WALL_CELL
+      end  
+    end
+  end
+  
+  def put_element x, y, type
+    if x < 1 or y < 1 or x > width or  y > height
+      raise "violation of  boundaries"
+    end
+    
+    @cells[x][y] = type
+    
+  end
+  
+  def add_beeper message, x, y
+    beeper = Beeper.new message, x, y
+    
+    @beepers = @beepers + [beeper]
+    
+    put_element x, y, BEEPER
+  end
+  
+  def remove_beeper x, y
+    @beepers.delete_if{|b| b.x == x and b.y == y}
+      
+    remove_element x, y
+  end
+  
+  def add_karel karel
+    @karel = karel
+  end
+  
+  def draw
+
+    Curses.curs_set(2)
+    
+    Curses.init_screen
+    Curses.start_color
+
+    # Determines the colors in the 'attron' below
+    Curses.init_pair(COLOR_YELLOW,COLOR_RED,COLOR_YELLOW)
+    Curses.init_pair(COLOR_GREEN,COLOR_GREEN,COLOR_BLACK)
+    Curses.init_pair(COLOR_RED,COLOR_WHITE,COLOR_RED)
+    Curses.init_pair(COLOR_BLUE,COLOR_BLUE,COLOR_BLACK)
+
+    Curses.clear
+ 
+    # show all cells
+    for x in (0..(@width+1)) do
+      for y in (0..(@height+1)) do
+        Curses.setpos(x, y)
+        if !rotated_cells(x,y).nil? and  rotated_cells(x,y)[:bg_color] == 'yellow'
+          Curses.attron(color_pair(COLOR_YELLOW)|A_NORMAL) do
+            Curses.addstr(rotated_cells(x,y)[:character])
+          end
+        end
+        if !rotated_cells(x,y).nil? and  rotated_cells(x,y)[:character] == '*'
+          Curses.attron(color_pair(COLOR_GREEN)|A_NORMAL) do
+            Curses.addstr(rotated_cells(x,y)[:character])
+          end
+        end
+        if rotated_cells(x,y).nil? 
+          Curses.attron(color_pair(COLOR_BLUE)|A_NORMAL) do
+            Curses.addstr(".")
+          end
+        end
+      end
+    end
+    
+    if !@karel.nil?
+      Curses.setpos(@karel.y, @karel.x)
+      Curses.attron(color_pair(COLOR_RED)|A_NORMAL) do
+        case @karel.direction
+        when :to_east
+          Curses.addstr(KAREL_TO_EAST[:character])
+        when :to_south
+          Curses.addstr(KAREL_TO_SOUTH[:character])
+        when :to_west
+          Curses.addstr(KAREL_TO_WEST[:character])
+        when :to_north
+          Curses.addstr(KAREL_TO_NORTH[:character])
+        end
+      
+      Curses.setpos(@karel.y, @karel.x)
+      end  
+    end
+    
+    Curses.refresh
+    sleep 0.5
+  end
+  
+  def rotated_cells x, y
+    @cells[y][x]
+  end
+  
+  def remove_element x, y
+    @cells[x][y] = nil
+  end
+end
